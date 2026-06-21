@@ -91,8 +91,9 @@ public class IcebergRestCatalogTest extends BaseServerTest {
                 + "\"}"
                 + ",\"endpoints\":["
                 + "\"GET /v1/{prefix}/namespaces\","
-                + "\"GET /v1/{prefix}/namespaces/{namespace}\""
-                + ",\"HEAD /v1/{prefix}/namespaces/{namespace}/tables/{table}\","
+                + "\"GET /v1/{prefix}/namespaces/{namespace}\","
+                + "\"HEAD /v1/{prefix}/namespaces/{namespace}\","
+                + "\"HEAD /v1/{prefix}/namespaces/{namespace}/tables/{table}\","
                 + "\"GET /v1/{prefix}/namespaces/{namespace}/tables/{table}\","
                 + "\"GET /v1/{prefix}/namespaces/{namespace}/views/{view}\","
                 + "\"POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/metrics\","
@@ -169,6 +170,21 @@ public class IcebergRestCatalogTest extends BaseServerTest {
 
       // non-prefixed URL should result in 404
       resp = client.get(TEST_BASE_NON_PREFIX + "/namespaces").aggregate().join();
+      assertThat(resp.status().code()).isEqualTo(404);
+    }
+
+    // NamespaceExists
+    {
+      AggregatedHttpResponse resp =
+          client.head(TEST_BASE_PREFIX + "/namespaces/" + TestUtils.SCHEMA_NAME).aggregate().join();
+      assertThat(resp.status().code()).isEqualTo(200);
+
+      // non-prefixed URL should result in 404
+      resp =
+          client
+              .head(TEST_BASE_NON_PREFIX + "/namespaces/" + TestUtils.SCHEMA_NAME)
+              .aggregate()
+              .join();
       assertThat(resp.status().code()).isEqualTo(404);
     }
   }

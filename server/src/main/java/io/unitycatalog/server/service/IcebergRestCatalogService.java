@@ -13,11 +13,13 @@ import com.linecorp.armeria.server.annotation.Post;
 import com.linecorp.armeria.server.annotation.ProducesJson;
 import io.unitycatalog.server.auth.annotation.AuthorizeExpression;
 import io.unitycatalog.server.auth.annotation.AuthorizeResourceKey;
+import io.unitycatalog.server.exception.BaseException;
 import io.unitycatalog.server.exception.IcebergRestExceptionHandler;
 import io.unitycatalog.server.model.ListSchemasResponse;
 import io.unitycatalog.server.model.ListTablesResponse;
 import io.unitycatalog.server.model.SchemaInfo;
 import io.unitycatalog.server.persist.Repositories;
+import io.unitycatalog.server.persist.SchemaRepository;
 import io.unitycatalog.server.persist.TableRepository;
 import io.unitycatalog.server.service.iceberg.MetadataService;
 import io.unitycatalog.server.service.iceberg.TableConfigService;
@@ -32,6 +34,7 @@ import org.apache.iceberg.TableMetadata;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.BadRequestException;
+import org.apache.iceberg.exceptions.NoSuchNamespaceException;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.exceptions.NoSuchViewException;
 import org.apache.iceberg.rest.Endpoint;
@@ -52,6 +55,7 @@ public class IcebergRestCatalogService {
       List.of(
           Endpoint.V1_LIST_NAMESPACES,
           Endpoint.V1_LOAD_NAMESPACE,
+          Endpoint.V1_NAMESPACE_EXISTS,
           Endpoint.V1_TABLE_EXISTS,
           Endpoint.V1_LOAD_TABLE,
           Endpoint.V1_LOAD_VIEW,
@@ -61,6 +65,7 @@ public class IcebergRestCatalogService {
   private final SchemaService schemaService;
   private final TableConfigService tableConfigService;
   private final MetadataService metadataService;
+  private final SchemaRepository schemaRepository;
   private final TableRepository tableRepository;
   private final SessionFactory sessionFactory;
 
@@ -72,6 +77,7 @@ public class IcebergRestCatalogService {
     this.schemaService = schemaService;
     this.tableConfigService = tableConfigService;
     this.metadataService = metadataService;
+    this.schemaRepository = repositories.getSchemaRepository();
     this.tableRepository = repositories.getTableRepository();
     this.sessionFactory = repositories.getSessionFactory();
   }
@@ -140,6 +146,20 @@ public class IcebergRestCatalogService {
         .withNamespace(Namespace.of(namespace))
         .setProperties(JsonUtils.getInstance().readValue(resp, SchemaInfo.class).getProperties())
         .build();
+  }
+
+  @Head("/v1/catalogs/{catalog}/namespaces/{namespace}")
+  @AuthorizeExpression("#authorize(#principal, #metastore, OWNER)")
+  @AuthorizeResourceKey(METASTORE)
+  public HttpResponse namespaceExists(
+      @Param("catalog") String catalog, @Param("namespace") String namespace) {
+    String schemaFullName = String.join(".", catalog, namespace);
+    try {
+      schemaRepository.getSchema(schemaFullName);
+      return HttpResponse.of(HttpStatus.OK);
+    } catch (BaseException e) {
+      throw new NoSuchNamespaceException("Namespace does not exist: %s", namespace);
+    }
   }
 
   // Table APIs
